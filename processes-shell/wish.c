@@ -1,244 +1,306 @@
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <fcntl.h>
+#include <errno.h>
 
-char *searchPaths[100] = {"/bin/", "/usr/bin/"};
-int pathCount = 2;
-char *commandTokens[100];
-int tokenCount = 0; 
-int processIDs[100];
+#define ERROR_MESSAGE_LENGTH 30
+#define MAX_TOKENS 64
+#define MAX_PATHS 100
+
+// Define processIDs and processCount
+pid_t processIDs[MAX_PATHS];
 int processCount = 0;
 
-void splitInputIntoTokens(FILE *source); 
-void processNextCommand(); 
-int checkForRedirection(char *tokens[], int startingIndex); 
-void displayError(); 
+// Declare getPath if not defined elsewhere
+char *getPath(char *arg);
 
-int main(int argc, char *argv[]) {
-    switch(argc) {
-        case 1: // Interactive mode
-            splitInputIntoTokens(stdin);
-            break;
-        case 2: { // Batch mode
-            FILE *fileStream = fopen(argv[1], "r");
-            if(fileStream) {
-                splitInputIntoTokens(fileStream);
-                fclose(fileStream); // Properly close the file
-            } else {
-                displayError();
-                exit(EXIT_FAILURE);
-            }
-            break;
-        }
-        default: // Incorrect number of arguments
-            displayError();
-            exit(EXIT_FAILURE);
+void userloop();
+void batchloop(FILE *file);
+int wishexit(char **args);
+int wishExecute(char **args);
+int wishnumbuiltins();
+char **tokenize(char *line, char *delim);
+void changeDirectory(char *path);
+int wishPath(char **args);
+int wishcd(char **args);
+int wishLaunch(char **args);
+char *concatPath(const char *path1, const char *path2);
+
+// Function declarations
+int validateArgs(char **args);
+char *getPath(char *arg);
+
+char *builtinstr[] = {"cd", "exit", "path"};
+int (*builtinfunc[])(char **) = {&wishcd, &wishexit, &wishPath};
+char error_message[ERROR_MESSAGE_LENGTH] = "An error has occurred\n";
+char *path[MAX_PATHS]; // Define path as an array of pointers
+int pathNull = 0;
+int paths = 0;
+
+int main(int argc, char *argv[])
+{
+    FILE *file;
+    if (argc > 2)
+    {
+        fprintf(stderr, "%s", error_message);
+        exit(EXIT_FAILURE);
     }
-    return EXIT_SUCCESS;
+    else
+    {
+        if (argc == 2)
+        {
+            file = fopen(argv[1], "r");
+            if (file != NULL)
+            {
+                batchloop(file);
+            }
+        }
+        else if (argc == 1)
+            userloop();
+    }
 }
 
-/*void splitInputIntoTokens(FILE *source)
+void userloop()
 {
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t nread;
+
     while (1)
     {
-        if (source == stdin)
-            printf("wish> ");
-        int prevTokenCount = tokenCount;
-        tokenCount = 0;
-        char *line = NULL;
-        size_t len = 0;
-        if (getline(&line, &len, source) == EOF)
+        printf("wish> ");
+        nread = getline(&line, &len, stdin);
+        if (nread == -1)
+        {
             exit(0);
-        size_t lineSize = strlen(line);
-        char *adjustedLine = malloc(lineSize * 6);
-        int adjustment = 0;
-        if (!strcmp(line, "&\n")) continue;
-        for (int i = 0; i < lineSize; i++)
-        {
-            if (line[i] == '>' || line[i] == '&' || line[i] == '|') 
-            {
-                adjustedLine[i + adjustment] = ' ';
-                adjustment++;
-                adjustedLine[i + adjustment] = line[i];
-                i++;
-                adjustedLine[i + adjustment] = ' ';
-                adjustment++;
-            }
-            adjustedLine[i + adjustment] = line[i];
         }
-        char *token;
-        while ((token = strsep(&adjustedLine, " \n")) != NULL)
+        else
         {
-            if (!strcmp(token, "&")) 
-            {
-                commandTokens[tokenCount] = NULL;
-                tokenCount++;
-            }
-            if (memcmp(token, "\0", 1))
-            {
-                commandTokens[tokenCount] = token;
-                tokenCount++;
-            }
-        }
-        for (int i = tokenCount; i < prevTokenCount; i++)
-        {
-            commandTokens[i] = NULL;
-        }
-        processNextCommand(); 
-        free(adjustedLine);
-        for (int i = 0; i < processCount; i++) 
-        {
-            int status;
-            waitpid(processIDs[i], &status, 0);
+            wishExecute(tokenize(line, " \t\n"));
         }
     }
+    free(line);
 }
-*/
 
- void splitInputIntoTokens(FILE *source) {
-     char *line = NULL;
-     size_t len = 0;
-     ssize_t read;
-
-     while ((read = getline(&line, &len, source)) != -1) {
-         if (source == stdin) {
-             printf("wish> ");
-         }
-
-         if (!strcmp(line, "&\n")) continue;  //Skip empty commands
-
-         char *lineCopy = strdup(line);  //Duplicate the line for safe manipulation
-         char *token, *rest = lineCopy;
-         tokenCount = 0;  //Reset token count for each new line
-
-         while ((token = strtok_r(rest, " \n", &rest))) {
-             if (token[0] == '>' || token[0] == '&' || token[0] == '|') {
-                 commandTokens[tokenCount++] = " ";  //Separate operators from commands/arguments
-             }
-             commandTokens[tokenCount++] = token;
-         }
-
-         processNextCommand(); 
-
-         free(lineCopy);  //Free the duplicated line
-     }
-    
-     free(line);  //Free the original line allocated by getline
-     for (int i = 0; i < processCount; i++) {
-         int status;
-         waitpid(processIDs[i], &status, 0);
-     }
- }
-
-
-void processNextCommand()
+void batchloop(FILE *file)
 {
-    for (int i = 0; i < tokenCount; i++)
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t nread;
+
+    nread = getline(&line, &len, file);
+
+    if (nread != -1)
     {
-        if (!strcmp(commandTokens[i], "exit"))
+        do
         {
-            if (commandTokens[i + 1] == NULL)
+            if (strcmp(line, "exit") == 0 || strcmp(line, "exit\n") == 0)
             {
                 exit(0);
             }
-            else
-            {
-                i++;
-                displayError();
-            }
-        }
-        else if (!strcmp(commandTokens[i], "cd"))
-        {
-            if (chdir(commandTokens[++i])) 
-            {
-                displayError();
-            }
-            while (commandTokens[i] != NULL) i++;
-            i++;
-        }
-        else if (!strcmp(commandTokens[i], "path"))
-        {
-            pathCount = 0;
-            for (int j = 1; j < tokenCount; j++)
-            {
-                char *resolvedPath = realpath(commandTokens[j], NULL); 
-                if (resolvedPath != NULL)
-                    searchPaths[j - 1] = resolvedPath;
-                else 
-                    displayError();
-                pathCount++;
-            }
-            i += pathCount;
-        }
-        else 
-        {
-            int pid = fork();
-            processIDs[processCount++] = pid;
-            if (pid == -1)
-            {
-                displayError();
-                exit(1);
-            }
-            if (pid == 0) 
-            {
-                if (checkForRedirection(commandTokens, i) != -1) 
-                {
-                    for (int j = 0; j < pathCount; j++)
-                    {
-                        char *fullPath = malloc(4096); 
-                        strcpy(fullPath, searchPaths[j]);
-                        strcat(fullPath, "/");
-                        strcat(fullPath, commandTokens[i]); 
-                        if (!access(fullPath, X_OK))
-                        {
-                            execv(fullPath, commandTokens + i); 
-                        }
-                    }
-                    displayError();
-                    exit(1);
-                }
-            }
-            else
-            {
-                while (commandTokens[i] != NULL) i++;
-                i++;
-                if (i < tokenCount)
-                    continue;
-            }
-        }
+
+            wishExecute(tokenize(line, " \t\n"));
+
+            nread = getline(&line, &len, file);
+        } while (nread != -1);
     }
+
+    free(line);
+    exit(0);
 }
 
-int checkForRedirection(char *tokens[], int start)
-{
-    for (int i = start; tokens[i] != NULL; i++)
-    {
-        if (!strcmp(tokens[i], ">") && i != start) 
-        {
-            tokens[i] = NULL;
-            if (tokens[i + 1] == NULL || tokens[i + 2] != NULL) 
-            {
-                displayError();
-                return -1;
-            }
-            else 
-            {
-                int fileDescriptor = open(tokens[i + 1], O_WRONLY | O_CREAT, 0777);
-                dup2(fileDescriptor, STDOUT_FILENO); 
-                tokens[i + 1] = NULL;
-                close(fileDescriptor);
-            }
-            return i;
-        }
+int wishcd(char **args){
+    // no path specified
+    if(args[1] == NULL){
+            fprintf(stderr, "%s", error_message);
+    }
+    else{
+        // Use args[1] directly assuming it contains the path
+        // path was invalid
+        if(chdir(args[1]) != 0){
+            fprintf(stderr, "%s", error_message);
+            return 1;
+        }  
     }
     return 0;
 }
 
-void displayError()
+void changeDirectory(char *path)
 {
-    char errorMessage[30] = "An error has occurred\n";
-    write(STDERR_FILENO, errorMessage, strlen(errorMessage));
+    int rc = chdir(path);
+    if (rc != 0)
+    {
+        fprintf(stderr, "%s", error_message);
+    }
+}
+
+int wishexit(char **args) {
+    int i = 1;
+    while (args[i] != NULL) {
+        fprintf(stderr, "%s", error_message);
+        return 0;
+        i++;
+    }
+    exit(0);
+}
+
+
+int wishExecute(char **args)
+{
+    if (args[0] == NULL)
+        return 1;
+
+    // Check if the command is a built-in command
+    for (int i = 0; i < wishnumbuiltins(); i++)
+    {
+        if (strcmp(args[0], builtinstr[i]) == 0)
+        {
+            return (*builtinfunc[i])(args); // Execute built-in command
+        }
+    }
+
+    // If the command is not a built-in command, execute it
+    char binPath[256]; // Assuming max path length of 256
+    sprintf(binPath, "/bin/%s", args[0]); // Prepend /bin/ to the command name
+
+    // Execute the command
+    if (execv(binPath, args) == -1)
+    {
+        //perror("execv"); // Print error if execv fails
+        fprintf(stderr, "%s", error_message);
+    }
+
+    // This line will only be reached if execv fails
+    return 0;
+}
+
+int wishnumbuiltins()
+{
+    return sizeof(builtinstr) / sizeof(char *);
+}
+
+char **tokenize(char *line, char *delim)
+{
+    char **tokens = malloc(MAX_TOKENS * sizeof(char *));
+    char *token;
+    int index = 0;
+
+    token = strtok(line, delim);
+    while (token != NULL)
+    {
+        tokens[index] = token;
+        index++;
+        token = strtok(NULL, delim);
+    }
+    tokens[index] = NULL;
+    return tokens;
+}
+
+int wishPath(char **args)
+{
+    if (args[1] == NULL)
+    {
+        pathNull = 1;
+        return 0;
+    }
+    for (int i = 1; args[i] != NULL; i++)
+    {
+        if (args[i] != NULL)
+        {
+            char *tmp = (char *)malloc(200 * sizeof(char));
+            getcwd(tmp, 200);
+            if (!access(args[i], X_OK))
+            {
+                // found the path in the cwd
+                // add the current working directory so it's an absolute path
+                path[paths] = concatPath(tmp, args[i]);
+                paths++;
+                // a path has been specified.
+                pathNull = 0;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int wishLaunch(char **args) {
+    int i = 0;
+    pid_t pid;
+    
+    while (args[i] != NULL) {
+        pid = fork();
+        processIDs[processCount] = pid;
+        processCount++;
+        
+        if (pid == 0) {
+            // Child process
+            if (validateArgs(args)) {
+                fprintf(stderr, "%s", error_message);
+                exit(EXIT_FAILURE);
+            } else {
+                char *cmdpath = getPath(args[i]);
+                if (*cmdpath != '\0') {
+                    execv(cmdpath, args);
+                } else {
+                    fprintf(stderr, "%s", error_message);
+                    exit(EXIT_FAILURE);
+                }
+            }
+        } else if (pid < 0) {
+            fprintf(stderr, "%s", error_message);
+        }
+        
+        i++;
+    }
+    
+    return pid;
+}
+
+char *concatPath(const char *path1, const char *path2) {
+    size_t len1 = strlen(path1);
+    size_t len2 = strlen(path2);
+
+    // Allocate memory for the concatenated path
+    char *result = malloc(len1 + len2 + 2); // Plus 2 for '/' and '\0'
+    if (result == NULL) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+
+    // Copy path1 and path2 into the result buffer
+    strcpy(result, path1);
+    strcat(result, "/");
+    strcat(result, path2);
+
+    return result;
+}
+
+char* getPath(char *s1) {
+    char *s2;
+    char *result = malloc(100 * sizeof(char));
+    int i = 0;
+    while (i < paths) {
+        s2 = path[i];
+        result = concatPath(s2, s1);
+        if (!access(result, X_OK)) {
+            return result;
+        }
+        i++;
+    }
+    // Corrected to use getcwd instead of printcwd
+    s2 = getcwd(NULL, 0);
+    result = concatPath(s2, s1);
+    if (!access(result, X_OK)) {
+        return result;
+    }
+    result[0] = '\0'; // Setting the first character to null terminator
+    return result;
+}
+
+int validateArgs(char **args) {
+    // This function should validate if the arguments are valid.
+    // For the sake of this example, let's assume they are always valid.
+    return 0;
 }
