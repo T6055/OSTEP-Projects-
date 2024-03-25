@@ -67,8 +67,7 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void userloop()
-{
+void userloop() {
     char *line = NULL;
     size_t len = 0;
     ssize_t nread;
@@ -89,8 +88,7 @@ void userloop()
     free(line);
 }
 
-void batchloop(FILE *file)
-{
+void batchloop(FILE *file) {
     char *line = NULL;
     size_t len = 0;
     ssize_t nread;
@@ -117,7 +115,7 @@ void batchloop(FILE *file)
     exit(0);
 }
 
-int wishcd(char **args){
+int wishcd(char **args) {
     // no path specified
     if(args[1] == NULL){
             fprintf(stderr, "%s", error_message);
@@ -131,8 +129,7 @@ int wishcd(char **args){
     return 0;
 }
 
-void changeDirectory(char *path)
-{
+void changeDirectory(char *path) {
     int rc = chdir(path);
     if (rc != 0)
     {
@@ -173,33 +170,76 @@ int wishExecute(char **args) {
     return 0; 
 }
 
-int wishnumbuiltins()
-{
+int wishnumbuiltins() {
     return sizeof(builtinstr) / sizeof(char *);
 }
 
-char **tokenize(char *line, char *delim)
-{
+char **tokenize(char *line, char *delim) { // passes tests 11 by splitting the string into tokens 
     char **tokens = malloc(MAX_TOKENS * sizeof(char *));
     char *token;
     int index = 0;
 
-    token = strtok(line, delim);
+    token = strtok(line, " \r\n\t");
     while (token != NULL)
     {
-        tokens[index] = token;
-        index++;
-        token = strtok(NULL, delim);
+        // this is going to handle whitespace
+        if ((*token == '\0') || (*token == '\n') || (*token == '\t')) {
+            token = strtok(NULL, " \r\n\t");
+            continue;
+        }
+        // this is gonna split the command
+        if ((strchr(token, '>')) && (token[0] != '>')) {  
+            char *subtoken;
+            subtoken = strtok(token, ">");
+            tokens[index] = subtoken;
+            index++;
+            subtoken = ">";
+            tokens[index] = subtoken;
+            index++;
+            subtoken = strtok(NULL, ">");
+            tokens[index] = subtoken;
+            index++; 
+        } else if ((strchr(token, '&')) && (token[0] != '&')) { 
+            // valid & operator will split the command
+            char *subtoken;
+            while ((subtoken = strtok(token, "&"))) {
+                tokens[index] = subtoken;
+                index++;
+                subtoken = "&";
+                tokens[index] = subtoken;
+                index++;
+                token = strtok(NULL, "&");
+            }
+            tokens[index - 1] = NULL;
+            index--;
+        }  else if ((strchr(token, '\"'))) { 
+            char *quoteToken = malloc(1024 * sizeof(char*));
+            quoteToken = strtok(token, "\"");
+            if(strchr(token, '\"')){
+                quoteToken = strtok(NULL, "\"");
+            }else{
+                quoteToken = strtok(NULL, "\"");
+                token = strtok(NULL, "\"");
+                strcat(quoteToken, " ");
+                strcat(quoteToken, token);
+            }
+            // remove any new line character at the end
+            strtok(quoteToken, "\n");
+            // add the full quote token to the tokens for args
+            tokens[index] = quoteToken;
+            index++;
+        } else {
+            tokens[index] = token;
+            index++;
+        }
+        token = strtok(NULL, " \r\n\t");
     }
+    // this will end the array with a null
     tokens[index] = NULL;
-    for(int i = 0; i != index+1; i++){
-        //printf("tokens[%d]: %s\n", i, tokens[i]);
-    }
     return tokens;
 }
 
-int wishPath(char **args)
-{
+int wishPath(char **args) {
     if (args[1] == NULL)
     {
         pathNull = 1; // non built ins are working 
