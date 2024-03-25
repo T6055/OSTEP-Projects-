@@ -4,7 +4,10 @@
 #include <string.h> // For string manipulation functions
 #include <errno.h> // For error handling
 #include <fcntl.h> // For file control options
+#include <sys/stat.h> 
 
+// define section 
+#define _GNU_SOURCE
 #define ERROR_MESSAGE_LENGTH 30 // Maximum length of an error message
 #define MAX_TOKENS 64 // Maximum number of tokens in a command
 #define MAX_PATHS 100 // Maximum number of paths in the path variable
@@ -42,27 +45,26 @@ int pathNull = 0; // Flag to indicate if path is empty
 int paths = 2; // Initial number of paths
 
 // main functions 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     FILE *file; // File pointer for batch mode
-    if (argc > 2)
-    {
+
+    if (argc > 2) {
         fprintf(stderr, "%s", error_message); // Print an error message if too many arguments are provided
         exit(EXIT_FAILURE); // Exit the program with a failure status
-    }
-    else
-    {
-        if (argc == 2)
-        {
+    } else {
+        if (argc == 2) {
             file = fopen(argv[1], "r");
-            if (file != NULL)
-            {
+            if (file != NULL) {
                 batchloop(file);
+            } else {
+                fprintf(stderr, "%s", error_message);
+                exit(EXIT_FAILURE);
             }
-        }
-        else if (argc == 1)
+        } else if (argc == 1)
             userloop();
     }
+
+    return 0;
 }
 
 void userloop()
@@ -108,7 +110,7 @@ void batchloop(FILE *file)
             count++;
 
             nread = getline(&line, &len, file);
-        } while (nread != -1);
+        } while (nread!= -1);
     }
 
     free(line);
