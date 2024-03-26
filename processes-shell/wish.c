@@ -5,6 +5,7 @@
 #include <errno.h> // For error handling
 #include <fcntl.h> // For file control options
 #include <sys/stat.h> 
+#include <sys/wait.h>
 
 // define section 
 #define _GNU_SOURCE
@@ -29,6 +30,7 @@ int wishPath(char **args); // Function to handle the 'path' command
 int wishcd(char **args); // Function to handle the 'cd' command
 int wishLaunch(char **args); // Function to launch external commands
 char *concatPath(const char *path1, const char *path2); // Function to concatenate paths
+void para2(char **args);
 void parallelCommandExecute(char *line);
 int validateArgs(char **args); // Function to validate command arguments
 char *getPath(char *arg);
@@ -110,6 +112,38 @@ void batchloop(FILE *file) {
     free(line);
     exit(0);
 }
+
+void para2(char **args) {
+    pid_t pid;
+    int paraCount = 0;
+
+    // Count the number of parallel commands
+    for (int i = 0; args[i] != NULL; i++) {
+        if (*args[i] == '&') {
+            paraCount++;
+        }
+    }
+
+    // Initialize index to iterate over args array
+    int index = 0;
+
+    // Execute each parallel command
+    while (index < paraCount) {
+        // Execute the command starting from the current index
+        pid = wishExecute(args + index);
+        if (pid > 0) {
+            // Skip to the next command by finding the next '&' symbol
+            while (args[index] != NULL && *args[index] != '&') {
+                index++;
+            }
+            if (args[index] != NULL) {
+                index++; // Move past the '&' symbol
+            }
+        }
+    }
+}
+
+
 
 void parallelCommandExecute(char *line) {
     char *commands[MAX_TOKENS]; // Adjusted the array size
@@ -198,7 +232,8 @@ int wishExecute(char **args) {
     // Check for the presence of '&' symbol in the command
     for (int i = 0; args[i] != NULL; i++) {
         if (strcmp(args[i], "&") == 0) {
-            parallelCommandExecute(args[i - 1]); // Call parallelCommandExecute
+            //parallelCommandExecute(args[i - 1]); // Call parallelCommandExecute
+        para2(args);
             return 0;
         }
     }
@@ -210,6 +245,10 @@ int wishExecute(char **args) {
         fprintf(stderr, "%s", error_message);
     }  
     
+    for (int k=0; k<processCount; k++){
+        int status;
+        waitpid(processIDs[k], &status, 0);
+    }
     return 0; 
 }
 
