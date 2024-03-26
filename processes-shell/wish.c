@@ -29,7 +29,7 @@ int wishPath(char **args); // Function to handle the 'path' command
 int wishcd(char **args); // Function to handle the 'cd' command
 int wishLaunch(char **args); // Function to launch external commands
 char *concatPath(const char *path1, const char *path2); // Function to concatenate paths
-void ParallelCommandsexec(char *line);
+void executeParallelCommands(char *line);
 int validateArgs(char **args); // Function to validate command arguments
 char *getPath(char *arg);
 // Global variables
@@ -111,7 +111,7 @@ void batchloop(FILE *file) {
     exit(0);
 }
 
-void ParallelCommandsexec(char *line) {
+void executeParallelCommands(char *line) {
     char *commands[MAX_TOKENS]; // Adjusted the array size
     int nCommands = 0;
     char *command = strtok(line, "&");
@@ -198,7 +198,7 @@ int wishExecute(char **args) {
     // Check for the presence of '&' symbol in the command
     for (int i = 0; args[i] != NULL; i++) {
         if (strcmp(args[i], "&") == 0) {
-            ParallelCommandsexec(args[i - 1]); // Call executeParallelCommands
+            executeParallelCommands(args[i - 1]); // Call executeParallelCommands
             return 0;
         }
     }
