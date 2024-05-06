@@ -40,6 +40,7 @@ char* getAccessTime(struct stat, int human);
 char* getModTime(struct stat, int human);
 char* getStatusChangeTime(struct stat fileInfo, int human);
 
+
 int main(int argc, char *argv[]) {
     if (argc != 2) {
         fprintf(stderr, "Usage: %s <file_path>\n", argv[0]);
@@ -91,12 +92,21 @@ void print_JSON_Output(const char* path, const char* number, const char* type,
                          const char* statusChangeTime) {
     static char str[MAX_STRING]; // Fixed-size character array
     int length = snprintf(str, MAX_STRING,
-        "  {\n    \"filepath\": \"%s\",\n    \"inode\": {\n"
-        "      \"number\": %s,\n      \"type\": \"%s\",\n"
-        "      \"permissions\": \"%s\",\n      \"linkCount\": %s,\n"
-        "      \"uid\": %s,\n      \"gid\": %s,\n      \"size\": %s,\n"
-        "      \"accessTime\": %s,\n      \"modificationTime\": %s,\n"
-        "      \"statusChangeTime\": %s\n    }\n  },\n",
+       "  {\n"
+    "    \"filepath\": \"%s\",\n"
+    "    \"inode\": {\n"
+    "      \"number\": %s,\n"
+    "      \"type\": \"%s\",\n"
+    "      \"permissions\": \"%s\",\n"
+    "      \"linkCount\": %s,\n"
+    "      \"uid\": %s,\n"
+    "      \"gid\": %s,\n"
+    "      \"size\": %s,\n"
+    "      \"accessTime\": %s,\n"
+    "      \"modificationTime\": %s,\n"
+    "      \"statusChangeTime\": %s\n"
+    "    }\n"
+    "  },\n",
         path, number, type, permissions, linkCount, uid,
         gid, size, accessTime, modTime, statusChangeTime);
     if (length >= MAX_STRING) {
@@ -197,47 +207,38 @@ char* getSize(struct stat fileInfo) {
     return buffer;
 }
 
-char* getStatusChangeTime(struct stat fileInfo, int human) {
-    if (human) {
-        struct tm *info = localtime(&fileInfo.st_ctime);
-        static char buffer[30];
-        strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", info);
-        return buffer;
-    } else {
-        static char buffer[20];
-        snprintf(buffer, sizeof(buffer), "%ld", fileInfo.st_ctime);
-        return buffer;
-    }
-}
-
 char* getAccessTime(struct stat fileInfo, int human) {
     if (human) {
         struct tm *info;
         // Convert time_t to broken-down time representation
         info = localtime(&fileInfo.st_atime);
-        // Define a buffer large enough for the formatted date string
-        char buffer[30];  // "YYYY-MM-DD HH:MM:SS" will fit comfortably
-        size_t result = strftime(buffer, sizeof(buffer), "\"%Y-%m-%d %H:%M:%S\"", info);
-        // Check if strftime returned 0, which means the buffer was too small or another error occurred
-        if (result == 0) {
-            return NULL;  // Handle error appropriately, return NULL or handle differently
+        // Calculate the required buffer size for the formatted string
+        int n = snprintf(NULL, 0, "\"%04d-%02d-%02d %02d:%02d:%02d\"",
+                         info->tm_year + 1900, info->tm_mon + 1,
+                         info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
+        assert(n > 0); // Ensure the calculation is successful
+        // Allocate memory for the formatted string
+        char* formatted_time = malloc(n + 1);
+        if (!formatted_time) {
+            return NULL; // Return NULL if memory allocation fails
         }
-        // Allocate memory for the formatted string to return
-        char* formatted_time = malloc(result + 1);
-        if (formatted_time) {
-            strcpy(formatted_time, buffer);
-        }
+        // Format the date and time into the allocated buffer
+        snprintf(formatted_time, n + 1, "\"%04d-%02d-%02d %02d:%02d:%02d\"",
+                 info->tm_year + 1900, info->tm_mon + 1,
+                 info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
         return formatted_time;
     } else {
         time_t seconds = fileInfo.st_atime;
-        // Directly create buffer and format the timestamp
-        char buffer[21];  // Large enough to hold any 64-bit integer (up to 20 digits) plus null-terminator
-        snprintf(buffer, sizeof(buffer), "%ld", seconds);
-        // Allocate memory for the buffer and copy the formatted string
-        char* formatted_time = malloc(strlen(buffer) + 1);
-        if (formatted_time) {
-            strcpy(formatted_time, buffer);
+        // Calculate the buffer size needed for the timestamp
+        int n = snprintf(NULL, 0, "%ld", seconds);
+        assert(n > 0); // Ensure the calculation is successful
+        // Allocate memory for the timestamp string
+        char* formatted_time = malloc(n + 1);
+        if (!formatted_time) {
+            return NULL; // Return NULL if memory allocation fails
         }
+        // Format the timestamp into the buffer
+        snprintf(formatted_time, n + 1, "%ld", seconds);
         return formatted_time;
     }
 }
@@ -246,30 +247,70 @@ char* getModTime(struct stat fileInfo, int human) {
     if (human) {
         struct tm *info;
         // Convert time_t to broken-down time representation
-        info = localtime(&fileInfo.st_mtime);  // Using st_mtime for modification time
-        // Define a buffer large enough for the formatted date string
-        char buffer[30];  // "YYYY-MM-DD HH:MM:SS" will fit comfortably
-        size_t result = strftime(buffer, sizeof(buffer), "\"%Y-%m-%d %H:%M:%S\"", info);
-        // Check if strftime returned 0, which means the buffer was too small or another error occurred
-        if (result == 0) {
-            return NULL;  // Handle error appropriately, return NULL or handle differently
+        info = localtime(&fileInfo.st_mtime); // Use st_mtime for modification time
+        // Calculate the required buffer size for the formatted string
+        int n = snprintf(NULL, 0, "\"%04d-%02d-%02d %02d:%02d:%02d\"",
+                         info->tm_year + 1900, info->tm_mon + 1,
+                         info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
+        assert(n > 0); // Ensure the calculation is successful
+        // Allocate memory for the formatted string
+        char* formatted_time = malloc(n + 1);
+        if (!formatted_time) {
+            return NULL; // Return NULL if memory allocation fails
         }
-        // Allocate memory for the formatted string to return
-        char* formatted_time = malloc(result + 1);
-        if (formatted_time) {
-            strcpy(formatted_time, buffer);
-        }
+        // Format the date and time into the allocated buffer
+        snprintf(formatted_time, n + 1, "\"%04d-%02d-%02d %02d:%02d:%02d\"",
+                 info->tm_year + 1900, info->tm_mon + 1,
+                 info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
         return formatted_time;
     } else {
-        time_t seconds = fileInfo.st_mtime;  // Using st_mtime for modification time
-        // Directly create buffer and format the timestamp
-        char buffer[21];  // Large enough to hold any 64-bit integer (up to 20 digits) plus null-terminator
-        snprintf(buffer, sizeof(buffer), "%ld", seconds);
-        // Allocate memory for the buffer and copy the formatted string
-        char* formatted_time = malloc(strlen(buffer) + 1);
-        if (formatted_time) {
-            strcpy(formatted_time, buffer);
+        time_t seconds = fileInfo.st_mtime; // Use st_mtime for modification time
+        // Calculate the buffer size needed for the timestamp
+        int n = snprintf(NULL, 0, "%ld", seconds);
+        assert(n > 0); // Ensure the calculation is successful
+        // Allocate memory for the timestamp string
+        char* formatted_time = malloc(n + 1);
+        if (!formatted_time) {
+            return NULL; // Return NULL if memory allocation fails
         }
+        // Format the timestamp into the buffer
+        snprintf(formatted_time, n + 1, "%ld", seconds);
+        return formatted_time;
+    }
+}
+
+char* getStatusChangeTime(struct stat fileInfo, int human) {
+    if (human) {
+        struct tm *info;
+        // Convert time_t to broken-down time representation
+        info = localtime(&fileInfo.st_ctime); // Use st_ctime for status change time
+        // Calculate the required buffer size for the formatted string
+        int n = snprintf(NULL, 0, "\"%04d-%02d-%02d %02d:%02d:%02d\"",
+                         info->tm_year + 1900, info->tm_mon + 1,
+                         info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
+        assert(n > 0); // Ensure the calculation is successful
+        // Allocate memory for the formatted string
+        char* formatted_time = malloc(n + 1);
+        if (!formatted_time) {
+            return NULL; // Return NULL if memory allocation fails
+        }
+        // Format the date and time into the allocated buffer
+        snprintf(formatted_time, n + 1, "\"%04d-%02d-%02d %02d:%02d:%02d\"",
+                 info->tm_year + 1900, info->tm_mon + 1,
+                 info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
+        return formatted_time;
+    } else {
+        time_t seconds = fileInfo.st_ctime; // Use st_ctime for status change time
+        // Calculate the buffer size needed for the timestamp
+        int n = snprintf(NULL, 0, "%ld", seconds);
+        assert(n > 0); // Ensure the calculation is successful
+        // Allocate memory for the timestamp string
+        char* formatted_time = malloc(n + 1);
+        if (!formatted_time) {
+            return NULL; // Return NULL if memory allocation fails
+        }
+        // Format the timestamp into the buffer
+        snprintf(formatted_time, n + 1, "%ld", seconds);
         return formatted_time;
     }
 }
