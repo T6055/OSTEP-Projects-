@@ -85,6 +85,7 @@ int main(int argc, char *argv[]) {
 
 
 // print detailed info about JSON file 
+// need it in human readable 
 void print_JSON_Output(const char* path, const char* number, const char* type,
                          const char* permissions, const char* linkCount,
                          const char* uid, const char* gid, const char* size,
