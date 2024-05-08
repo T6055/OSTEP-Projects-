@@ -85,7 +85,6 @@ int validate_file(struct stat *fileInfo) {
 
 void parseargs(int argc, char **argv) {
     //printf("This is working\n"); //checks to see if it works 
-    
     if (argc <= 1) {
         help();
         exit(EXIT_FAILURE);
@@ -278,8 +277,6 @@ void print_JSON_Output(const char* path, const char* number, const char* type,
     printf("  recursive: %d\n", Options.recursive);
     printf("  logPath: %s\n", Options.logPath ? Options.logPath : "NULL");
     printf("  path: %s\n", Options.path ? Options.path : "NULL");
-
-
 }
 char* getNumber(struct stat fileInfo) {
     static char buffer[20];
@@ -367,11 +364,11 @@ char* getGid(struct stat fileInfo) {
 }
 
 char* getSize(struct stat fileInfo) {
-    printf("this is running i think\n");
+    //printf("this is running i think\n");
     static char buf[64]; // Static buffer for the size string
     long long size = fileInfo.st_size;
     if (Options.human) {
-        printf("working!\n");
+        //printf("working!\n");
         static const char *SIZES[] = { "B", "KB", "MB", "GB", "TB", "PB", "EB" }; // Include all units up to exabytes
         int div = 0;
 
@@ -391,8 +388,6 @@ char* getSize(struct stat fileInfo) {
 
     return buf; // Return the buffer containing the formatted size
 }
-
-
 
 char* getAccessTime(struct stat fileInfo, int human) {
     if (human) {
@@ -522,7 +517,3 @@ void help(){
   printf("  -l, --log <log_file>:       Log operations to a specified file.\n");
   printf("   Example: inspect -i /path/to/file -l /path/to/logfile\n\n");
 }
-
-
-
-  
