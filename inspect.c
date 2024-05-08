@@ -84,39 +84,65 @@ int validate_file(struct stat *fileInfo) {
 }
 
 void parseargs(int argc, char **argv) {
-    //printf("This is working\n"); //checks to see if it works 
+    // validate there are enough args. If not, display help information
     if (argc <= 1) {
         help();
         exit(EXIT_FAILURE);
     }
-    int i = 1;
-    while (i < argc) {
+
+    for (int i = 1; i < argc; i++) {
+        // command line arg is an option
         if (argv[i][0] == '-') {
-            if (argv[i][1] == '-') {  // Handle long options ex: --help 
-                longArgs(argv[i]);
-                if (Options.log && i + 1 < argc) {
-                    Options.logPath = argv[++i]; // Handle log path if necessary
+            // command line arg uses --someword format
+            if (argv[i][1] == '-') {
+                if (!longArgs(argv[i])) { // Check for long arguments like "--help"
+                    fprintf(stderr, "Invalid option %s\n", argv[i]);
+                    exit(EXIT_FAILURE);
                 }
-            } else {  // Handle short options
+                // Handle specific long options that may require additional parameters
+                if (strcmp(argv[i], "--log") == 0 && i + 1 < argc) {
+                    Options.logPath = argv[++i]; // Increment to skip next argument
+                }
+            } else {
+                // command line arg uses short -X format
                 for (int j = 1; argv[i][j] != '\0'; j++) {
-                    shortArgs(argv[i][j]); // Correctly passing the character
-                    if (Options.log && i + 1 < argc) {
+                    if (!shortArgs(argv[i][j])) { // Check for short arguments like "-h"
+                        fprintf(stderr, "Invalid option -%c\n", argv[i][j]);
+                        exit(EXIT_FAILURE);
+                    }
+                    // Handle specific short options that may require additional parameters
+                    if (argv[i][j] == 'l' && i + 1 < argc) {
                         Options.logPath = argv[++i];
-                        break; // Exit the loop after handling the log path
+                        break; // Break to avoid processing further characters
                     }
                 }
             }
         } else {
-            Options.path = argv[i]; // Assume it's a valid path
+            // This part is used to handle format types or paths directly
+            if (strcmp(argv[i], "json") == 0) {
+                Options.json = 1;
+            } else if (strcmp(argv[i], "text") == 0) {
+                Options.format = 1;
+            } else {
+                // Assume it's a path if no specific format was mentioned
+                if (!Options.path) {
+                    Options.path = argv[i];
+                } else {
+                    fprintf(stderr, "Multiple paths provided. Please specify only one path.\n");
+                    exit(EXIT_FAILURE);
+                }
+            }
         }
-        i++;
     }
 
-    if (!Options.all && Options.path == NULL) {
-        help(); // Show help if no path provided and 'all' is not specified
+    // Check if path or 'all' option is not specified
+    if (!Options.all && !Options.path) {
+        fprintf(stderr, "Error: No path provided and 'all' not specified.\n");
+        help();
         exit(EXIT_FAILURE);
     }
 }
+
 
 int shortArgs(char option) {
     switch (option) {
