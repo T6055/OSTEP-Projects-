@@ -95,6 +95,7 @@ void list_directory(const char *path,struct stat fileInfo, char** argv) {
     struct dirent *entry;
     struct stat multfiles;
 
+
     if (!(dir = opendir(path))) {
         perror("opendir() error");
         return;
@@ -126,6 +127,7 @@ void list_directory(const char *path,struct stat fileInfo, char** argv) {
     //return 0;  // Success
 }
 
+//do redirection, before parsing and printing so log stuff
 
 void parseargs(int argc, char **argv) {
     //add something that keeps track of the files 
@@ -591,3 +593,6 @@ void help(){
   printf("  -l, --log <log_file>:       Log operations to a specified file.\n");
   printf("   Example: inspect -i /path/to/file -l /path/to/logfile\n\n");
 }
+
+
+//log doesnt work either same as redirection is assignment 2 
