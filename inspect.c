@@ -44,22 +44,27 @@ void parseargs(int argc, char *argv[]);
 int shortArgs(char option);
 int longArgs(char* opt);
 void errorOption(char*);
+void list_directory(const char *path,struct stat fileInfo, char** argv);
 
 
 
 int main(int argc, char *argv[]) {
-    struct stat fileInfo;
-    
+    struct stat fileInfo = {};
     if (argc <= 1) {
         fprintf(stderr, "Usage: %s <file_path>\n", argv[0]); //error message too much stuff happening in command
         return 1;
     }
 
-    
-    
     parseargs(argc, argv); // Set all flags and paths
+    printf("[\n");
+if (Options.all) {
+        const char *path = Options.path ? Options.path : "."; // Use the provided path or default to current directory
+        list_directory(path, fileInfo, argv);
+        printf("]\n"); 
+        return 0;
+    }
 
-    if (validate_file(&fileInfo) != 0) {  // Check file after parsing args
+    if (Options.path != NULL && validate_file(&fileInfo) != 0) {  // Check file after parsing args
         return 1;  // Exit if validation fails
     }
 
@@ -68,6 +73,7 @@ int main(int argc, char *argv[]) {
                           getPermissions(fileInfo), getLinkCount(fileInfo), getUid(fileInfo),
                           getGid(fileInfo), getSize(fileInfo), getAccessTime(fileInfo, Options.human),
                           getModTime(fileInfo, Options.human), getStatusChangeTime(fileInfo, Options.human));
+    //printf("]");       
     } else {
         print_console_Output(fileInfo, argv);
     }
@@ -83,8 +89,49 @@ int validate_file(struct stat *fileInfo) {
     return 0;  // Return 0 to indicate success
 }
 
+//loops to check the files in the directory
+void list_directory(const char *path,struct stat fileInfo, char** argv) {
+    DIR *dir;
+    struct dirent *entry;
+    struct stat multfiles;
+
+    if (!(dir = opendir(path))) {
+        perror("opendir() error");
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_REG || entry->d_type == DT_DIR) {
+            printf("%s\n", entry->d_name);
+            
+            // declare struct (info) for info struct stat fileInfo
+            stat(entry->d_name, &multfiles);
+
+            // Print Info using info struct PRINTING THE SAME INFO FOR EACH FILE 
+             if (Options.json) {
+        print_JSON_Output(entry->d_name, getNumber(multfiles), getType(multfiles),
+                          getPermissions(multfiles), getLinkCount(multfiles), getUid(multfiles),
+                          getGid(multfiles), getSize(multfiles), getAccessTime(multfiles, Options.human),
+                          getModTime(multfiles, Options.human), getStatusChangeTime(multfiles, Options.human));
+    } else {
+        print_console_Output(multfiles, argv);
+    }
+
+        }
+       
+    // return 0;  // Success
+    }
+    
+    closedir(dir);
+    //return 0;  // Success
+}
+
+
 void parseargs(int argc, char **argv) {
-    // validate there are enough args. If not, display help information
+    //add something that keeps track of the files 
+    //add something keeps track of number of files
+    // print info for each of the files 
+    // validate there are enough args no put help 
     if (argc <= 1) {
         help();
         exit(EXIT_FAILURE);
@@ -128,7 +175,7 @@ void parseargs(int argc, char **argv) {
                 if (!Options.path) {
                     Options.path = argv[i];
                 } else {
-                    fprintf(stderr, "Multiple paths provided. Please specify only one path.\n");
+                    //fprintf(stderr, "Multiple paths provided. Please specify only one path.\n"); // this is wrong allow multiple paths 
                     exit(EXIT_FAILURE);
                 }
             }
@@ -137,7 +184,7 @@ void parseargs(int argc, char **argv) {
 
     // Check if path or 'all' option is not specified
     if (!Options.all && !Options.path) {
-        fprintf(stderr, "Error: No path provided and 'all' not specified.\n");
+        fprintf(stderr, "Error: No path provided or 'all' not specified.\n");
         help();
         exit(EXIT_FAILURE);
     }
@@ -148,7 +195,7 @@ int shortArgs(char option) {
     switch (option) {
         case '?':
             help();
-            return 1;
+            return 0;
         case 'i':
             Options.inode = 1;
             return 1;
@@ -293,17 +340,18 @@ void print_JSON_Output(const char* path, const char* number, const char* type,
         // This implementation does not support handling overflow
     }
     printf("%s", opt);
-    printf("\nOptions:\n");
-    printf("  human: %d\n", Options.human);
-    printf("  all: %d\n", Options.all);
-    printf("  format: %d\n", Options.format);
-    printf("  json: %d\n", Options.json);
-    printf("  log: %d\n", Options.log);
-    printf("  inode: %d\n", Options.inode);
-    printf("  recursive: %d\n", Options.recursive);
-    printf("  logPath: %s\n", Options.logPath ? Options.logPath : "NULL");
-    printf("  path: %s\n", Options.path ? Options.path : "NULL");
+    // printf("\nOptions:\n");
+    // printf("  human: %d\n", Options.human);
+    // printf("  all: %d\n", Options.all);
+    // printf("  format: %d\n", Options.format);
+    // printf("  json: %d\n", Options.json);
+    // printf("  log: %d\n", Options.log);
+    // printf("  inode: %d\n", Options.inode);
+    // printf("  recursive: %d\n", Options.recursive);
+    // printf("  logPath: %s\n", Options.logPath ? Options.logPath : "NULL");
+    // printf("  path: %s\n", Options.path ? Options.path : "NULL"); //add this to file path 
 }
+
 char* getNumber(struct stat fileInfo) {
     static char buffer[20];
     snprintf(buffer, sizeof(buffer), "%llu", (unsigned long long)fileInfo.st_ino);
@@ -395,7 +443,7 @@ char* getSize(struct stat fileInfo) {
     long long size = fileInfo.st_size;
     if (Options.human) {
         //printf("working!\n");
-        static const char *SIZES[] = { "B", "KB", "MB", "GB", "TB", "PB", "EB" }; // Include all units up to exabytes
+        static const char *SIZES[] = { "B", "K", "M", "G", "T", "P", "E" }; // Include all units up to exabytes
         int div = 0;
 
         while (size >= 1024 && div < (sizeof SIZES / sizeof *SIZES) - 1) {
