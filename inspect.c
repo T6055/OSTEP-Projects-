@@ -20,10 +20,9 @@ static struct {
     int json;
     int log;
     int inode;
-    int recursive;
     char* logPath;
     char* path;
-} Options = {0, 0, 0, 0, 0, 1, 0, NULL, NULL}; // Initialize all options to default values
+} Options = {0, 0, 0, 0, 0, 1, NULL, NULL}; // Initialize all options to default values
 
 void print_console_Output(struct stat fileInfo, char** argv);
 void print_JSON_Output(const char*, const char*, const char*, const char*, const char*, const char*,
@@ -50,37 +49,45 @@ void list_directory(const char *path,struct stat fileInfo, char** argv);
 
 int main(int argc, char *argv[]) {
     struct stat fileInfo = {};
-    if (argc <= 1) {
-        fprintf(stderr, "Usage: %s <file_path>\n", argv[0]); //error message too much stuff happening in command
-        return 1;
+    FILE *logFile = NULL;
+    int logFD;
+
+    parseargs(argc, argv);  // Set all flags and paths
+
+    if (Options.log && Options.logPath) {
+        logFile = fopen(Options.logPath, "w");
+        if (!logFile) {
+            perror("Failed to open log file");
+            return 1;
+        }
+        // Get the file descriptor and redirect stdout
+        logFD = fileno(logFile);
+        if (dup2(logFD, STDOUT_FILENO) == -1) {
+            perror("Failed to redirect stdout to log file");
+            fclose(logFile);
+            return 1;
+        }
     }
 
-    parseargs(argc, argv); // Set all flags and paths
-    printf("[\n");
-if (Options.all) {
-        const char *path = Options.path ? Options.path : "."; // Use the provided path or default to current directory
+    // Existing code logic for processing files
+    if (Options.all) {
+        const char *path = Options.path ? Options.path : ".";
         list_directory(path, fileInfo, argv);
-        printf("]\n"); 
-        return 0;
+    } else if (Options.path && validate_file(&fileInfo) == 0) {
+        if (Options.json) {
+            print_JSON_Output(Options.path, getNumber(fileInfo), getType(fileInfo), getPermissions(fileInfo), getLinkCount(fileInfo), getUid(fileInfo), getGid(fileInfo), getSize(fileInfo), getAccessTime(fileInfo, Options.human), getModTime(fileInfo, Options.human), getStatusChangeTime(fileInfo, Options.human));
+        } else {
+            print_console_Output(fileInfo, argv);
+        }
     }
 
-    if (Options.path != NULL && validate_file(&fileInfo) != 0) {  // Check file after parsing args
-        return 1;  // Exit if validation fails
+    if (logFile) {
+        fclose(logFile);  // Close the log file properly
     }
 
-    if (Options.json) {
-        print_JSON_Output(Options.path, getNumber(fileInfo), getType(fileInfo),
-                          getPermissions(fileInfo), getLinkCount(fileInfo), getUid(fileInfo),
-                          getGid(fileInfo), getSize(fileInfo), getAccessTime(fileInfo, Options.human),
-                          getModTime(fileInfo, Options.human), getStatusChangeTime(fileInfo, Options.human));
-    //printf("]");       
-    } else {
-        print_console_Output(fileInfo, argv);
-    }
-
-    return 0;  // Success
+    return 0;
 }
-    
+
 int validate_file(struct stat *fileInfo) {
     if (Options.path != NULL && stat(Options.path, fileInfo) != 0) {
         fprintf(stderr, "Error getting file info for %s: %s\n", Options.path, strerror(errno));
@@ -204,14 +211,6 @@ int shortArgs(char option) {
         case 'a':
             Options.all = 1;
             return 1;
-        case 'r':
-            if (Options.all) {
-                Options.recursive = 1;
-                return 1;
-            } else {
-                fprintf(stderr, "Error: Recursive option '-r' requires '-a' option first.\n");
-                exit(EXIT_FAILURE);
-            }
         case 'h':
             Options.human = 1;
             return 1;
@@ -240,13 +239,6 @@ int longArgs(char* opt) {
     if (strcmp(opt, "--all") == 0) {
         Options.all = 1;
         return 1;
-    }
-    if (strcmp(opt, "--recursive") == 0) {
-        if (Options.all) {
-            Options.recursive = 1;
-            return 1;
-        }
-        return 0;
     }
     if (strcmp(opt, "--human") == 0) {
         Options.human = 1;
@@ -296,7 +288,7 @@ void print_console_Output(struct stat fileInfo, char** argv){
     printf("Last Modification Time: %s\n", modTime);
     printf("Last Status Change Time: %s\n", statusChangeTime);
 
-    printf("\nChecking to see if the Options Values are changing....\n");
+    printf("\nChecking to see if the Options Values are changing....\n\n");
     printf("Options:\n");
     printf("  human: %d\n", Options.human);
     printf("  all: %d\n", Options.all);
@@ -304,7 +296,6 @@ void print_console_Output(struct stat fileInfo, char** argv){
     printf("  json: %d\n", Options.json);
     printf("  log: %d\n", Options.log);
     printf("  inode: %d\n", Options.inode);
-    printf("  recursive: %d\n", Options.recursive);
     printf("  logPath: %s\n", Options.logPath ? Options.logPath : "NULL");
     printf("  path: %s\n", Options.path ? Options.path : "NULL");
 
@@ -334,7 +325,7 @@ void print_JSON_Output(const char* path, const char* number, const char* type,
     "      \"modificationTime\": %s,\n"
     "      \"statusChangeTime\": %s\n"
     "    }\n"
-    "  },\n",
+    "  },\n\n",
         path, number, type, permissions, linkCount, uid,
         gid, size, accessTime, modTime, statusChangeTime);
     if (length >= MAX_STRING) {
@@ -349,7 +340,6 @@ void print_JSON_Output(const char* path, const char* number, const char* type,
     // printf("  json: %d\n", Options.json);
     // printf("  log: %d\n", Options.log);
     // printf("  inode: %d\n", Options.inode);
-    // printf("  recursive: %d\n", Options.recursive);
     // printf("  logPath: %s\n", Options.logPath ? Options.logPath : "NULL");
     // printf("  path: %s\n", Options.path ? Options.path : "NULL"); //add this to file path 
 }
@@ -584,7 +574,6 @@ void help(){
   printf("   Note that this flag is optional and the default behavior is\n");
   printf("   identical if the flag is omitted.\n");
   printf("  -a, --all [directory_path]: Display inode information for all files within the specified directory. If nopaths is provided, default to the current directory.\n");
-  printf("   Optional flag: -r, --recursive for recursive listing.\n");
   printf("   Example: inspect -a /path/to/directory -r\n");
   printf("  -h, --human:                Output all sizes in kilobytes (K), megabytes (M), or gigabytes(G) and all dates in a human-readable form.\n");
   printf("   Example: inspect -i /path/to/file -h\n");
