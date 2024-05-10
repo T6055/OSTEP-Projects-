@@ -24,21 +24,21 @@ static struct {
     char* path;
 } Options = {0, 0, 0, 0, 0, 1, NULL, NULL}; // Initialize all options to default values
 
-void print_console_Output(struct stat fileInfo, char** argv);
+void print_console_Output(struct stat* fileInfo, char** argv);
 void print_JSON_Output(const char*, const char*, const char*, const char*, const char*, const char*,
                        const char*, const char*, const char*, const char*, const char*);
 void help();
 int validate_file(struct stat *fileInfo);
-char* getNumber(struct stat);
-char* getType(struct stat);
-char* getPermissions(struct stat);
-char* getLinkCount(struct stat);
-char* getUid(struct stat);
-char* getGid(struct stat);
-char* getSize(struct stat);
-char* getAccessTime(struct stat, int human);
-char* getModTime(struct stat, int human);
-char* getStatusChangeTime(struct stat fileInfo, int human);
+char* getNumber(struct stat*);
+char* getType(struct stat*);
+char* getPermissions(struct stat*);
+char* getLinkCount(struct stat*);
+char* getUid(struct stat*);
+char* getGid(struct stat*);
+char* getSize(struct stat*);
+char* getAccessTime(struct stat*, int human);
+char* getModTime(struct stat*, int human);
+char* getStatusChangeTime(struct stat* fileInfo, int human);
 void parseargs(int argc, char *argv[]);
 int shortArgs(char option);
 int longArgs(char* opt);
@@ -75,9 +75,9 @@ int main(int argc, char *argv[]) {
         list_directory(path, fileInfo, argv);
     } else if (Options.path && validate_file(&fileInfo) == 0) {
         if (Options.json) {
-            print_JSON_Output(Options.path, getNumber(fileInfo), getType(fileInfo), getPermissions(fileInfo), getLinkCount(fileInfo), getUid(fileInfo), getGid(fileInfo), getSize(fileInfo), getAccessTime(fileInfo, Options.human), getModTime(fileInfo, Options.human), getStatusChangeTime(fileInfo, Options.human));
+            print_JSON_Output(Options.path, getNumber(&fileInfo), getType(&fileInfo), getPermissions(&fileInfo), getLinkCount(&fileInfo), getUid(&fileInfo), getGid(&fileInfo), getSize(&fileInfo), getAccessTime(&fileInfo, Options.human), getModTime(&fileInfo, Options.human), getStatusChangeTime(&fileInfo, Options.human));
         } else {
-            print_console_Output(fileInfo, argv);
+            print_console_Output(&fileInfo, argv);
         }
     }
 
@@ -100,7 +100,7 @@ int validate_file(struct stat *fileInfo) {
 void list_directory(const char *path,struct stat fileInfo, char** argv) {
     DIR *dir;
     struct dirent *entry;
-    struct stat multfiles;
+    struct stat *multfiles = (struct stat*) malloc(sizeof(struct stat));
 
 
     if (!(dir = opendir(path))) {
@@ -113,7 +113,7 @@ void list_directory(const char *path,struct stat fileInfo, char** argv) {
             printf("%s\n", entry->d_name);
             
             // declare struct (info) for info struct stat fileInfo
-            stat(entry->d_name, &multfiles);
+            stat(entry->d_name, multfiles);
 
             // Print Info using info struct PRINTING THE SAME INFO FOR EACH FILE 
              if (Options.json) {
@@ -137,9 +137,6 @@ void list_directory(const char *path,struct stat fileInfo, char** argv) {
 //do redirection, before parsing and printing so log stuff
 
 void parseargs(int argc, char **argv) {
-    //add something that keeps track of the files 
-    //add something keeps track of number of files
-    // print info for each of the files 
     // validate there are enough args no put help 
     if (argc <= 1) {
         help();
@@ -149,6 +146,10 @@ void parseargs(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
         // command line arg is an option
         if (argv[i][0] == '-') {
+            if (strcmp(argv[i], "--help") == 0) {
+                    help();
+                    exit(EXIT_SUCCESS);
+            }
             // command line arg uses --someword format
             if (argv[i][1] == '-') {
                 if (!longArgs(argv[i])) { // Check for long arguments like "--help"
@@ -255,23 +256,23 @@ int longArgs(char* opt) {
     return 0; // Return 0 if no valid option was matched
 }
  
-void print_console_Output(struct stat fileInfo, char** argv){
+void print_console_Output(struct stat* fileInfo, char** argv){
     printf("\nInfo for: %s:\n", argv[1]);
-    printf("File Inode: %llu\n", fileInfo.st_ino);
+    printf("File Inode: %llu\n", fileInfo->st_ino);
     printf("File Type: ");
-    if (S_ISREG(fileInfo.st_mode))
+    if (S_ISREG(fileInfo->st_mode))
         printf("regular file\n");
-    else if (S_ISDIR(fileInfo.st_mode))
+    else if (S_ISDIR(fileInfo->st_mode))
         printf("directory\n");
-    else if (S_ISCHR(fileInfo.st_mode))
+    else if (S_ISCHR(fileInfo->st_mode))
         printf("character device\n");
-    else if (S_ISBLK(fileInfo.st_mode))
+    else if (S_ISBLK(fileInfo->st_mode))
         printf("block device\n");
-    else if (S_ISFIFO(fileInfo.st_mode))
+    else if (S_ISFIFO(fileInfo->st_mode))
         printf("FIFO (named pipe)\n");
-    else if (S_ISLNK(fileInfo.st_mode))
+    else if (S_ISLNK(fileInfo->st_mode))
         printf("symbolic link\n");
-    else if (S_ISSOCK(fileInfo.st_mode))
+    else if (S_ISSOCK(fileInfo->st_mode))
         printf("socket\n");
     else
         printf("unknown?\n");
@@ -282,7 +283,7 @@ void print_console_Output(struct stat fileInfo, char** argv){
     char* modTime = getModTime(fileInfo, Options.human);
     char* statusChangeTime = getStatusChangeTime(fileInfo, Options.human);
 
-    printf("Number of Hard Links: %hu\n", fileInfo.st_nlink);
+    printf("Number of Hard Links: %hu\n", fileInfo->st_nlink);
     printf("File Size: %s\n", sizeStr);  // Use formatted size
     printf("Last Access Time: %s\n", accessTime);
     printf("Last Modification Time: %s\n", modTime);
@@ -344,13 +345,13 @@ void print_JSON_Output(const char* path, const char* number, const char* type,
     // printf("  path: %s\n", Options.path ? Options.path : "NULL"); //add this to file path 
 }
 
-char* getNumber(struct stat fileInfo) {
+char* getNumber(struct stat *fileInfo) {
     static char buffer[20];
-    snprintf(buffer, sizeof(buffer), "%llu", (unsigned long long)fileInfo.st_ino);
+    snprintf(buffer, sizeof(buffer), "%llu", (unsigned long long)fileInfo->st_ino);
     return buffer;
 }
 
-char* getType(struct stat fileInfo) {
+char* getType(struct stat *fileInfo) {
     static char type[20]; // Assuming the type won't exceed 20 characters
     const char* types[] = {
         "regular file",
@@ -361,7 +362,7 @@ char* getType(struct stat fileInfo) {
         "symbolic link",
         "socket"
     };
-    mode_t mode = fileInfo.st_mode;
+    mode_t mode = fileInfo->st_mode;
     int i = 0;
     while (i < 7) {
         if (S_ISREG(mode)) {
@@ -394,45 +395,45 @@ char* getType(struct stat fileInfo) {
     return type;
 }
 
-char* getPermissions(struct stat fileInfo) {
+char* getPermissions(struct stat *fileInfo) {
     static char str1[11];
     int i = 0;
-    str1[i++] = (S_ISDIR(fileInfo.st_mode)) ? 'd' : '-';
-    str1[i++] = (fileInfo.st_mode & S_IRUSR) ? 'r' : '-';
-    str1[i++] = (fileInfo.st_mode & S_IWUSR) ? 'w' : '-';
-    str1[i++] = (fileInfo.st_mode & S_IXUSR) ? 'x' : '-';
-    str1[i++] = (fileInfo.st_mode & S_IRGRP) ? 'r' : '-';
-    str1[i++] = (fileInfo.st_mode & S_IWGRP) ? 'w' : '-';
-    str1[i++] = (fileInfo.st_mode & S_IXGRP) ? 'x' : '-';
-    str1[i++] = (fileInfo.st_mode & S_IROTH) ? 'r' : '-';
-    str1[i++] = (fileInfo.st_mode & S_IWOTH) ? 'w' : '-';
-    str1[i++] = (fileInfo.st_mode & S_IXOTH) ? 'x' : '-';
+    str1[i++] = (S_ISDIR(fileInfo->st_mode)) ? 'd' : '-';
+    str1[i++] = (fileInfo->st_mode & S_IRUSR) ? 'r' : '-';
+    str1[i++] = (fileInfo->st_mode & S_IWUSR) ? 'w' : '-';
+    str1[i++] = (fileInfo->st_mode & S_IXUSR) ? 'x' : '-';
+    str1[i++] = (fileInfo->st_mode & S_IRGRP) ? 'r' : '-';
+    str1[i++] = (fileInfo->st_mode & S_IWGRP) ? 'w' : '-';
+    str1[i++] = (fileInfo->st_mode & S_IXGRP) ? 'x' : '-';
+    str1[i++] = (fileInfo->st_mode & S_IROTH) ? 'r' : '-';
+    str1[i++] = (fileInfo->st_mode & S_IWOTH) ? 'w' : '-';
+    str1[i++] = (fileInfo->st_mode & S_IXOTH) ? 'x' : '-';
     str1[i++] = '\0';
     return str1;
 }
 
-char* getLinkCount(struct stat fileInfo) {
+char* getLinkCount(struct stat *fileInfo) {
     static char buffer[20];
-    snprintf(buffer, sizeof(buffer), "%lu", (unsigned long)fileInfo.st_nlink);
+    snprintf(buffer, sizeof(buffer), "%lu", (unsigned long)fileInfo->st_nlink);
     return buffer;
 }
 
-char* getUid(struct stat fileInfo) {
+char* getUid(struct stat *fileInfo) {
     static char buffer[20];
-    snprintf(buffer, sizeof(buffer), "%u", fileInfo.st_uid);
+    snprintf(buffer, sizeof(buffer), "%u", fileInfo->st_uid);
     return buffer;
 }
 
-char* getGid(struct stat fileInfo) {
+char* getGid(struct stat *fileInfo) {
     static char buffer[20];
-    snprintf(buffer, sizeof(buffer), "%u", fileInfo.st_gid);
+    snprintf(buffer, sizeof(buffer), "%u", fileInfo->st_gid);
     return buffer;
 }
 
-char* getSize(struct stat fileInfo) {
+char* getSize(struct stat *fileInfo) {
     //printf("this is running i think\n");
     static char buf[64]; // Static buffer for the size string
-    long long size = fileInfo.st_size;
+    long long size = fileInfo->st_size;
     if (Options.human) {
         //printf("working!\n");
         static const char *SIZES[] = { "B", "K", "M", "G", "T", "P", "E" }; // Include all units up to exabytes
@@ -455,11 +456,11 @@ char* getSize(struct stat fileInfo) {
     return buf; // Return the buffer containing the formatted size
 }
 
-char* getAccessTime(struct stat fileInfo, int human) {
+char* getAccessTime(struct stat* fileInfo, int human) {
     if (human) {
         struct tm *info;
         // Convert time_t to broken-down time representation
-        info = localtime(&fileInfo.st_atime);
+        info = localtime(&fileInfo->st_atime);
         // Calculate the required buffer size for the formatted string
         int n = snprintf(NULL, 0, "\"%04d-%02d-%02d %02d:%02d:%02d\"",
                          info->tm_year + 1900, info->tm_mon + 1,
@@ -476,7 +477,7 @@ char* getAccessTime(struct stat fileInfo, int human) {
                  info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
         return formatted_time;
     } else {
-        time_t seconds = fileInfo.st_atime;
+        time_t seconds = fileInfo->st_atime;
         // Calculate the buffer size needed for the timestamp
         int n = snprintf(NULL, 0, "%ld", seconds);
         assert(n > 0); // Ensure the calculation is successful
@@ -491,11 +492,11 @@ char* getAccessTime(struct stat fileInfo, int human) {
     }
 }
 
-char* getModTime(struct stat fileInfo, int human) {
+char* getModTime(struct stat* fileInfo, int human) {
     if (human) {
         struct tm *info;
         // Convert time_t to broken-down time representation
-        info = localtime(&fileInfo.st_mtime); // Use st_mtime for modification time
+        info = localtime(&fileInfo->st_mtime); // Use st_mtime for modification time
         // Calculate the required buffer size for the formatted string
         int n = snprintf(NULL, 0, "\"%04d-%02d-%02d %02d:%02d:%02d\"",
                          info->tm_year + 1900, info->tm_mon + 1,
@@ -512,7 +513,7 @@ char* getModTime(struct stat fileInfo, int human) {
                  info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
         return formatted_time;
     } else {
-        time_t seconds = fileInfo.st_mtime; // Use st_mtime for modification time
+        time_t seconds = fileInfo->st_mtime; // Use st_mtime for modification time
         // Calculate the buffer size needed for the timestamp
         int n = snprintf(NULL, 0, "%ld", seconds);
         assert(n > 0); // Ensure the calculation is successful
@@ -527,11 +528,11 @@ char* getModTime(struct stat fileInfo, int human) {
     }
 }
 
-char* getStatusChangeTime(struct stat fileInfo, int human) {
+char* getStatusChangeTime(struct stat* fileInfo, int human) {
     if (human) {
         struct tm *info;
         // Convert time_t to broken-down time representation
-        info = localtime(&fileInfo.st_ctime); // Use st_ctime for status change time
+        info = localtime(&fileInfo->st_ctime); // Use st_ctime for status change time
         // Calculate the required buffer size for the formatted string
         int n = snprintf(NULL, 0, "\"%04d-%02d-%02d %02d:%02d:%02d\"",
                          info->tm_year + 1900, info->tm_mon + 1,
@@ -548,7 +549,7 @@ char* getStatusChangeTime(struct stat fileInfo, int human) {
                  info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
         return formatted_time;
     } else {
-        time_t seconds = fileInfo.st_ctime; // Use st_ctime for status change time
+        time_t seconds = fileInfo->st_ctime; // Use st_ctime for status change time
         // Calculate the buffer size needed for the timestamp
         int n = snprintf(NULL, 0, "%ld", seconds);
         assert(n > 0); // Ensure the calculation is successful
@@ -584,4 +585,3 @@ void help(){
 }
 
 
-//log doesnt work either same as redirection is assignment 2 
