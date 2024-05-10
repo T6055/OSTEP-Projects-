@@ -42,9 +42,9 @@ char* getStatusChangeTime(struct stat* fileInfo, int human);
 void parseargs(int argc, char *argv[]);
 int shortArgs(char option);
 int longArgs(char* opt);
-void errorOption(char*);
+//void errorOption(char*);
 void list_directory(const char *path,struct stat fileInfo, char** argv);
-
+//void errorPath (char* path);
 
 
 int main(int argc, char *argv[]) {
@@ -121,6 +121,7 @@ void list_directory(const char *path,struct stat fileInfo, char** argv) {
                           getPermissions(multfiles), getLinkCount(multfiles), getUid(multfiles),
                           getGid(multfiles), getSize(multfiles), getAccessTime(multfiles, Options.human),
                           getModTime(multfiles, Options.human), getStatusChangeTime(multfiles, Options.human));
+        printf("]\n");
     } else {
         print_console_Output(multfiles, argv);
     }
@@ -566,6 +567,7 @@ char* getStatusChangeTime(struct stat* fileInfo, int human) {
 
 void help(){
   // prints the command line options 
+   printf("Usage: inspect [OPTION]... [PATH]...\n");
   printf("\nDisplay information for a file.\n\n");
   printf("Command-Line Options\n");
   printf("  -?, --help:                 Display help information about the tool and its options.\n");
