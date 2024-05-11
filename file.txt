@@ -3,10 +3,10 @@ Info for: -log:
 File Inode: 36324875
 File Type: regular file
 Number of Hard Links: 1
-File Size: 21801
-Last Access Time: 1715376706
-Last Modification Time: 1715376704
-Last Status Change Time: 1715376704
+File Size: 21881
+Last Access Time: 1715378946
+Last Modification Time: 1715378944
+Last Status Change Time: 1715378944
 
 Checking to see if the Options Values are changing....
 

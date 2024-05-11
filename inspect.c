@@ -68,14 +68,17 @@ int main(int argc, char *argv[]) {
             return 1;
         }
     }
-
+    // printf("[\n");
     // Existing code logic for processing files
     if (Options.all) {
+        printf("[\n");
         const char *path = Options.path ? Options.path : ".";
         list_directory(path, fileInfo, argv);
+        printf("]\n");
     } else if (Options.path && validate_file(&fileInfo) == 0) {
         if (Options.json) {
             print_JSON_Output(Options.path, getNumber(&fileInfo), getType(&fileInfo), getPermissions(&fileInfo), getLinkCount(&fileInfo), getUid(&fileInfo), getGid(&fileInfo), getSize(&fileInfo), getAccessTime(&fileInfo, Options.human), getModTime(&fileInfo, Options.human), getStatusChangeTime(&fileInfo, Options.human));
+            // printf("]\n");
         } else {
             print_console_Output(&fileInfo, argv);
         }
@@ -97,46 +100,42 @@ int validate_file(struct stat *fileInfo) {
 }
 
 //loops to check the files in the directory
-void list_directory(const char *path,struct stat fileInfo, char** argv) {
+void list_directory(const char *path, struct stat fileInfo, char** argv) {
     DIR *dir;
     struct dirent *entry;
-    struct stat *multfiles = (struct stat*) malloc(sizeof(struct stat));
+    struct stat fileStat;  // Use a local stat structure to ensure it's fresh each loop.
 
+    char fullPath[MAX_STRING];  // Buffer to hold the full path of the files
 
     if (!(dir = opendir(path))) {
-        perror("opendir() error");
+        perror("Failed to open directory");
         return;
     }
 
     while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_REG || entry->d_type == DT_DIR) {
-            printf("%s\n", entry->d_name);
-            
-            // declare struct (info) for info struct stat fileInfo
-            stat(entry->d_name, multfiles);
+        // Construct the full path of the file
+        snprintf(fullPath, sizeof(fullPath), "%s/%s", path, entry->d_name);
 
-            // Print Info using info struct PRINTING THE SAME INFO FOR EACH FILE 
-             if (Options.json) {
-        print_JSON_Output(entry->d_name, getNumber(multfiles), getType(multfiles),
-                          getPermissions(multfiles), getLinkCount(multfiles), getUid(multfiles),
-                          getGid(multfiles), getSize(multfiles), getAccessTime(multfiles, Options.human),
-                          getModTime(multfiles, Options.human), getStatusChangeTime(multfiles, Options.human));
-        printf("]\n");
-    } else {
-        print_console_Output(multfiles, argv);
-    }
-
+        // Check if we can get file stats; if not, continue to the next file
+        if (stat(fullPath, &fileStat) != 0) {
+            fprintf(stderr, "Failed to get stats for %s: %s\n", fullPath, strerror(errno));
+            continue;
         }
-       
-    // return 0;  // Success
+
+        if (Options.json) {
+            print_JSON_Output(fullPath, getNumber(&fileStat), getType(&fileStat),
+                              getPermissions(&fileStat), getLinkCount(&fileStat), getUid(&fileStat),
+                              getGid(&fileStat), getSize(&fileStat), getAccessTime(&fileStat, Options.human),
+                              getModTime(&fileStat, Options.human), getStatusChangeTime(&fileStat, Options.human));
+            // printf("]\n");
+        } else {
+            print_console_Output(&fileStat, argv);
+        }
     }
-    
     closedir(dir);
-    //return 0;  // Success
 }
 
 //do redirection, before parsing and printing so log stuff
-
 void parseargs(int argc, char **argv) {
     // validate there are enough args no put help 
     if (argc <= 1) {
@@ -256,10 +255,10 @@ int longArgs(char* opt) {
     }
     return 0; // Return 0 if no valid option was matched
 }
- 
+
 void print_console_Output(struct stat* fileInfo, char** argv){
     printf("\nInfo for: %s:\n", argv[1]);
-    printf("File Inode: %llu\n", fileInfo->st_ino);
+    printf("File Inode: %lu\n", fileInfo->st_ino);
     printf("File Type: ");
     if (S_ISREG(fileInfo->st_mode))
         printf("regular file\n");
@@ -284,22 +283,22 @@ void print_console_Output(struct stat* fileInfo, char** argv){
     char* modTime = getModTime(fileInfo, Options.human);
     char* statusChangeTime = getStatusChangeTime(fileInfo, Options.human);
 
-    printf("Number of Hard Links: %hu\n", fileInfo->st_nlink);
+    printf("Number of Hard Links: %lu\n", fileInfo->st_nlink);
     printf("File Size: %s\n", sizeStr);  // Use formatted size
     printf("Last Access Time: %s\n", accessTime);
     printf("Last Modification Time: %s\n", modTime);
-    printf("Last Status Change Time: %s\n", statusChangeTime);
+    printf("Last Status Change Time: %s\n\n", statusChangeTime);
 
-    printf("\nChecking to see if the Options Values are changing....\n\n");
-    printf("Options:\n");
-    printf("  human: %d\n", Options.human);
-    printf("  all: %d\n", Options.all);
-    printf("  format: %d\n", Options.format);
-    printf("  json: %d\n", Options.json);
-    printf("  log: %d\n", Options.log);
-    printf("  inode: %d\n", Options.inode);
-    printf("  logPath: %s\n", Options.logPath ? Options.logPath : "NULL");
-    printf("  path: %s\n", Options.path ? Options.path : "NULL");
+    // printf("\nChecking to see if the Options Values are changing....\n\n");
+    // printf("Options:\n");
+    // printf("  human: %d\n", Options.human);
+    // printf("  all: %d\n", Options.all);
+    // printf("  format: %d\n", Options.format);
+    // printf("  json: %d\n", Options.json);
+    // printf("  log: %d\n", Options.log);
+    // printf("  inode: %d\n", Options.inode);
+    // printf("  logPath: %s\n", Options.logPath ? Options.logPath : "NULL");
+    // printf("  path: %s\n", Options.path ? Options.path : "NULL");
 
     free(accessTime);
     free(modTime);
@@ -319,15 +318,15 @@ void print_JSON_Output(const char* path, const char* number, const char* type,
     "      \"number\": %s,\n"
     "      \"type\": \"%s\",\n"
     "      \"permissions\": \"%s\",\n"
-    "      \"linkCount\": %s,\n"
-    "      \"uid\": %s,\n"
-    "      \"gid\": %s,\n"
-    "      \"size\": %s,\n"
+    "      \"linkCount\": \"%s\",\n"
+    "      \"uid\": \"%s\",\n"
+    "      \"gid\": \"%s\",\n"
+    "      \"size\": \"%s\",\n"
     "      \"accessTime\": %s,\n"
     "      \"modificationTime\": %s,\n"
     "      \"statusChangeTime\": %s\n"
     "    }\n"
-    "  },\n\n",
+    "  },\n",
         path, number, type, permissions, linkCount, uid,
         gid, size, accessTime, modTime, statusChangeTime);
     if (length >= MAX_STRING) {
@@ -585,5 +584,3 @@ void help(){
   printf("  -l, --log <log_file>:       Log operations to a specified file.\n");
   printf("   Example: inspect -i /path/to/file -l /path/to/logfile\n\n");
 }
-
-
